@@ -38,6 +38,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { PerfilUsuarioModal } from "@/components/modals/perfil-usuario-modal"
+import { logout } from "@/lib/auth"
 import {
   Home,
   Users,
@@ -232,9 +233,13 @@ function UserDropdownMenu() {
     setShowPerfilModal(true)
   }
 
-  const handleCerrarSesion = () => {
+  const handleCerrarSesion = async () => {
     if (confirm("¿Está seguro de cerrar sesión?")) {
-      router.push("/")
+      try {
+        await logout()
+      } finally {
+        router.push("/")
+      }
     }
   }
 
@@ -298,9 +303,10 @@ export function Layout({ children }: LayoutProps) {
     )
   }
 
-  const getBreadcrumbs = () => {
+  interface Crumb { name: string; href: string; current?: boolean }
+  const getBreadcrumbs = (): Crumb[] => {
     const segments = pathname.split("/").filter(Boolean)
-    const breadcrumbs = [{ name: "Inicio", href: "/dashboard" }]
+    const breadcrumbs: Crumb[] = [{ name: "Inicio", href: "/dashboard" }]
 
     let currentPath = ""
     segments.forEach((segment, index) => {

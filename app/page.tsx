@@ -9,17 +9,52 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Eye, EyeOff, Heart } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { login } from "@/lib/auth"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  const handleLogin = (e: React.FormEvent) => {
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Simulación de login
-    router.push("/dashboard")
+    if (!process.env.NEXT_PUBLIC_API_BASE_URL) {
+      setError("Configuración inválida: falta NEXT_PUBLIC_API_BASE_URL. Crea .env.local y reinicia.")
+      return
+    }
+    if (!isValidEmail(email)) {
+      setError("Ingresa un correo electrónico válido.")
+      return
+    }
+    if (!password || password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.")
+      return
+    }
+    setError(null)
+    setIsLoading(true)
+    try {
+      // Debug: mostrar payload y baseURL
+      // eslint-disable-next-line no-console
+      console.log("[login] intentando autenticación", { email, baseURL: process.env.NEXT_PUBLIC_API_BASE_URL })
+      await login(email, password)
+      // eslint-disable-next-line no-console
+      console.log("[login] éxito")
+      router.push("/dashboard")
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("[login] error", err)
+      const status = err?.response?.status
+      if (status === 401) setError("Credenciales inválidas. Verifica tu correo y contraseña.")
+      else if (status === 400) setError(err?.response?.data?.message || "Solicitud inválida.")
+      else setError("Error del sistema. Inténtalo de nuevo más tarde.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -74,9 +109,21 @@ export default function LoginPage() {
                   </Button>
                 </div>
               </div>
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5">
-                Iniciar Sesión
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Iniciando…
+                  </>
+                ) : (
+                  "Iniciar Sesión"
+                )}
               </Button>
+              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
             </form>
             <div className="mt-6 text-center">
               <a href="#" className="text-sm text-blue-600 hover:text-blue-800">
