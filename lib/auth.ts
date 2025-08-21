@@ -1,29 +1,26 @@
-import api from "./api"
-import { saveTokens, getTokens, clearTokens } from "./storage"
+import Cookies from "js-cookie"
+import { api } from "./api"
 
 export async function login(email: string, password: string) {
 	const { data } = await api.post("/auth/login", { email, password })
-	if (!data?.accessToken || !data?.refreshToken) {
-		throw new Error("Respuesta de servidor inválida")
-	}
-	saveTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken })
-	return data
+	const { accessToken, refreshToken } = data
+	Cookies.set("accessToken", accessToken, { sameSite: "lax" })
+	Cookies.set("refreshToken", refreshToken, { sameSite: "lax" })
+	return true
 }
 
 export async function logout() {
+	const refreshToken = Cookies.get("refreshToken")
 	try {
-		const { refreshToken } = getTokens()
 		if (refreshToken) await api.post("/auth/logout", { refreshToken })
-	} catch {
-		// noop
 	} finally {
-		clearTokens()
+		Cookies.remove("accessToken")
+		Cookies.remove("refreshToken")
 	}
 }
 
 export function isAuthenticatedClient(): boolean {
 	if (typeof window === "undefined") return false
-	const { accessToken } = getTokens()
-	return !!accessToken
+	return !!Cookies.get("accessToken")
 }
 

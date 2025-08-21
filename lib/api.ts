@@ -1,78 +1,55 @@
-import axios, { AxiosError } from "axios"
-import { getTokens, saveTokens, clearTokens } from "./storage"
+import axios from "axios"
+import Cookies from "js-cookie"
 
-// Intentamos leer la base desde la variable pública.
-// Si no está (SSR temprano o mala config), diferimos a un fallback sólo en cliente.
-let baseURL = process.env.NEXT_PUBLIC_API_BASE_URL
-if (!baseURL && typeof window !== "undefined") {
-  // eslint-disable-next-line no-console
-  console.warn(
-    "[api] NEXT_PUBLIC_API_BASE_URL ausente en build. Usando origin como fallback (agregando /api/v1). Revisa tu .env.local.",
-  )
-  baseURL = `${window.location.origin}/api/v1`
-}
-if (!baseURL) {
-  // Último recurso: placeholder que hará fallar la llamada claramente pero sin romper el render.
-  baseURL = "__MISSING_BASE_URL__"
-}
-
-const api = axios.create({
-  baseURL,
-  headers: { "Content-Type": "application/json" },
+export const api = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  withCredentials: false,
 })
 
 api.interceptors.request.use((config) => {
-  const { accessToken } = getTokens()
-  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
+  const token = Cookies.get("accessToken")
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
 let isRefreshing = false
-let queue: Array<(t: string) => void> = []
+let queue: Array<(t?: string) => void> = []
+const enqueue = (cb: (t?: string) => void) => queue.push(cb)
+const flush = (t?: string) => { queue.forEach((cb) => cb(t)); queue = [] }
 
 api.interceptors.response.use(
-  (res) => res,
-  async (error: AxiosError<any>) => {
-    const status = error.response?.status
-    const original: any = error.config || {}
-    if (status === 401 && !original._retry) {
-      original._retry = true
-      const { refreshToken } = getTokens()
-      if (!refreshToken) {
-        clearTokens()
-        return Promise.reject(error)
-      }
-      try {
-        if (!isRefreshing) {
-          isRefreshing = true
-          const refreshBase = process.env.NEXT_PUBLIC_API_BASE_URL || baseURL
-          const { data } = await axios.post(`${refreshBase}/auth/refresh`, { refreshToken }, {
-            headers: { "Content-Type": "application/json" },
-          })
-          const newAccess = data?.accessToken as string
-          if (newAccess) {
-            saveTokens({ accessToken: newAccess, refreshToken })
-            queue.forEach((cb) => cb(newAccess))
-          } else {
-            clearTokens()
-          }
-          queue = []
-          isRefreshing = false
-        }
+  (r) => r,
+  async (error) => {
+    const original = error.config
+    if (error?.response?.status === 401 && !original._retry) {
+      if (isRefreshing) {
         return new Promise((resolve) => {
-          queue.push((token: string) => {
-            original.headers.Authorization = `Bearer ${token}`
+          enqueue((t) => {
+            if (t) original.headers.Authorization = `Bearer ${t}`
             resolve(api(original))
           })
         })
+      }
+      original._retry = true
+      isRefreshing = true
+      try {
+        const refreshToken = Cookies.get("refreshToken")
+        if (!refreshToken) throw error
+        const { data } = await axios.post(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`,
+          { refreshToken },
+        )
+        Cookies.set("accessToken", data.accessToken, { sameSite: "lax" })
+        flush(data.accessToken)
+        return api(original)
       } catch (e) {
+        Cookies.remove("accessToken")
+        Cookies.remove("refreshToken")
+        throw e
+      } finally {
         isRefreshing = false
-        clearTokens()
-        return Promise.reject(e)
       }
     }
-    return Promise.reject(error)
+    throw error
   },
 )
-
-export default api
