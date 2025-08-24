@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -154,8 +154,8 @@ export default function ViviendasPage() {
     setFilteredViviendas((prev) => [...prev, viviendaData])
   }
 
-  // Aplicar filtros cuando cambien
-  useState(() => {
+  // Aplicar filtros cuando cambian dependencias
+  useEffect(() => {
     applyFilters()
   }, [searchTerm, territorioFilter, sectorFilter, estadoFilter, viviendas])
 
@@ -168,7 +168,7 @@ export default function ViviendasPage() {
             <h1 className="text-3xl font-bold text-blue-900">Viviendas & Sectorización</h1>
             <p className="text-blue-600">Gestión territorial y mapeo de viviendas</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               variant="outline"
               className="border-blue-200 text-blue-700 hover:bg-blue-50 bg-transparent"
@@ -176,6 +176,13 @@ export default function ViviendasPage() {
             >
               <Map className="w-4 h-4 mr-2" />
               {showMap ? "Ver Lista" : "Ver Mapa"}
+            </Button>
+            <Button
+              variant="outline"
+              className="border-blue-200 text-blue-700 hover:bg-blue-50 bg-transparent"
+              onClick={() => window.location.href = '/viviendas/sectorizacion'}
+            >
+              Sectorización
             </Button>
             <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowNuevaViviendaModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
